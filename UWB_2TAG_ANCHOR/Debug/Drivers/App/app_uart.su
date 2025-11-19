@@ -1,0 +1,3 @@
+../Drivers/App/app_uart.c:24:6:app_uart_guide	24	static
+../Drivers/App/app_uart.c:74:6:app_uart_dist	48	static
+../Drivers/App/app_uart.c:107:6:app_uart_item_orientation	40	static

@@ -1,0 +1,4 @@
+../Drivers/App/app_uart_handler.c:16:6:HAL_UART_RxCpltCallback	4
+../Drivers/App/app_uart_handler.c:36:6:UART_HE_Receive_IT_Tag	1
+../Drivers/App/app_uart_handler.c:42:6:UART_HE_Receive_IT_Anchor	2
+../Drivers/App/app_uart_handler.c:47:9:check_frame	13

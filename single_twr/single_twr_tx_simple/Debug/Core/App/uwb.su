@@ -1,0 +1,6 @@
+../Core/App/uwb.c:12:6:UWB_Sendmessage	16	static
+../Core/App/uwb.c:23:10:send_poll_get_tx_timestamp	16	static
+../Core/App/uwb.c:34:6:resp_msg_get_ts	16	static
+../Core/App/uwb.c:43:5:receive_response	32	static
+../Core/App/uwb.c:89:8:calculate_tof	32	static
+../Core/App/uwb.c:98:8:calculate_distance	16	static
