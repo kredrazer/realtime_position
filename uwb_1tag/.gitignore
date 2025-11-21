@@ -1,0 +1,22 @@
+# Bỏ qua các thư mục build (thường chứa file rác)
+Debug/
+Release/
+build/
+Bin/
+Obj/
+
+# Bỏ qua các file tạm khi biên dịch
+*.o
+*.obj
+*.d
+*.su
+*.elf
+*.bin
+*.hex
+*.map
+*.p
+
+# Bỏ qua các file cấu hình tạm của IDE
+.settings/
+.vscode/
+*.launch
