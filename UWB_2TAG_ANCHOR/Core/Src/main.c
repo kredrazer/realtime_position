@@ -184,7 +184,7 @@ int main(void)
      //*-------anchor_code--------*//
     app_uwb_process_beacon_anchor(anchor_id);
     app_uwb_process_twr_anchor(anchor_id);
-    app_uwb_process_dist_revc(&dis0, &dis1, &dis2, &dis3,anchor_id);
+//    app_uwb_process_dist_revc(&dis0, &dis1, &dis2, &dis3,anchor_id);
 
 // check_becon_send_code
 	  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_4);

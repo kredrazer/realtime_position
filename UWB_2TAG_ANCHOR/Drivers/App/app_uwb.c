@@ -746,7 +746,7 @@ void app_uwb_process_twr_anchor(uint8_t anchor_id)
     if(should_listen)
     {
       prev_slot_index =slot_index;
-      twr_anchor()
+      twr_anchor();
     }
   }
 }

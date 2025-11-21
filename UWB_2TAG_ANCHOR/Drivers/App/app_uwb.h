@@ -60,13 +60,13 @@ void app_uwb_process_item_orientation_send(void);
 void app_uwb_process_guide_revc(void);
 
 // Anchor
-void distance_revc(uint16_t *dis0, uint16_t *dis1, uint16_t *dis2, uint16_t *dis3);
+void distance_revc(uint16_t *dis0, uint16_t *dis1, uint16_t *dis2, uint16_t *dis3,uint16_t *tag_id);
 void item_orientation_revc(void);
 void guide_send(void);
 void dis_msg_get(uint8_t *dis_field, uint16_t *dis);
 void app_uwb_process_beacon_anchor(uint8_t anchor_id);
 void app_uwb_process_twr_anchor(uint8_t anchor_id);
-void app_uwb_process_dist_revc(uint16_t *dis0, uint16_t *dis1, uint16_t *dis2, uint16_t *dis3, uint8_t anchor_id);
+void app_uwb_process_dist_revc(uint16_t *dis0, uint16_t *dis1, uint16_t *dis2,uint16_t *tag_id, uint16_t *dis3, uint8_t anchor_id);
 void app_uwb_process_item_orientation_revc(uint8_t anchor_id);
 void app_uwb_process_guide_send(uint8_t anchor_id);
 int32_t get_signal_quality(void);
