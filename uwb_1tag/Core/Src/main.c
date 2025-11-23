@@ -57,6 +57,7 @@
 uint8_t *data = "Hello USB CDC\n";
 uint8_t buf_dis1[20];
 uint8_t buffer[64]; 
+uint8_t anchor_id=0;// sau đó extern sang usb_cdc_if.c
 
 extern unsigned char garfield_128x64[];
 extern unsigned char github_logo_64x64[];
@@ -93,12 +94,6 @@ double a_x =0;
 //#define RESP_RX_TIMEOUT_UUS 400
 //#define SPEED_OF_LIGHT 299702547
 double dis0, dis1, dis2, dis3 = 0;
-
-
-//Nạp code lại thì config ở đây chỉnh: tag_id =0 , tag_id=1
-//anchor_id =0,1,2,3
-static uint8_t tag_id = 0;
-uint8_t anchor_id=0;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -175,17 +170,15 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  // sử dụng thiết bị loại nào thì comment phần code của thiết bị còn lại
-  //*-------tag_code--------*//
+//  //*-------tag_code--------*//
 	  app_uwb_process_beacon_tag();
-	  app_uwb_process_twr_tag(&dis0, &dis1, &dis2, &dis3,tag_id);
-    app_uwb_process_dist_send(dis0,dis1,dis2,dis3,tag_id);
+	  app_uwb_process_twr_tag(&dis0, &dis1, &dis2, &dis3);
+	  app_uwb_process_dist_send(dis0,dis1,dis2,dis3);
 
      //*-------anchor_code--------*//
-    app_uwb_process_beacon_anchor(anchor_id);
-    app_uwb_process_twr_anchor(anchor_id);
-//    app_uwb_process_dist_revc(&dis0, &dis1, &dis2, &dis3,anchor_id);
-
+//     app_uwb_process_beacon_anchor(anchor_id);
+//     app_uwb_process_twr_anchor(anchor_id);
+//     app_uwb_process_dist_revc(&dis0, &dis1, &dis2, &dis3,anchor_id);
 // check_becon_send_code
 	  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_4);
 

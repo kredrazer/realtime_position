@@ -72,7 +72,7 @@ typedef struct __attribute__((packed))
     uint8_t tail;
 } UART_Message_Item_Orientation;
 
-void app_uart_dist(UART_HandleTypeDef *huart, uint8_t *buffer,uint8_t *tag_id)
+void app_uart_dist(UART_HandleTypeDef *huart, uint8_t *buffer,uint16_t *tag_id)
 {
 	if (buffer[10] == 0) return;
     

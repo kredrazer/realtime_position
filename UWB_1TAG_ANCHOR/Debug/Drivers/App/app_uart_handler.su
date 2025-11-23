@@ -1,4 +1,0 @@
-../Drivers/App/app_uart_handler.c:16:6:HAL_UART_RxCpltCallback	16	static
-../Drivers/App/app_uart_handler.c:36:6:UART_HE_Receive_IT_Tag	8	static
-../Drivers/App/app_uart_handler.c:42:6:UART_HE_Receive_IT_Anchor	16	static
-../Drivers/App/app_uart_handler.c:47:9:check_frame	24	static
