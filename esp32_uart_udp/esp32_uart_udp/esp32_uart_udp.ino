@@ -5,9 +5,9 @@
 // I. CẤU HÌNH HỆ THỐNG (BẮT BUỘC PHẢI THAY ĐỔI)
 // =============================================================================
 
-const char* ssid = "TEN_WIFI_CUA_BAN";         // <-- ĐIỀN TÊN WIFI CỦA BẠN
-const char* password = "MAT_KHAU_WIFI";        // <-- ĐIỀN MẬT KHẨU WIFI CỦA BẠN
-const IPAddress remoteIP(192, 168, 1, 100);    // <-- ĐỊA CHỈ IP CỦA MÁY TÍNH NHẬN UDP
+const char* ssid = "Laptop";         // <-- ĐIỀN TÊN WIFI CỦA BẠN
+const char* password = "999999999";        // <-- ĐIỀN MẬT KHẨU WIFI CỦA BẠN
+const IPAddress remoteIP(192, 168, 137, 150);    // <-- ĐỊA CHỈ IP CỦA MÁY TÍNH NHẬN UDP
 const unsigned int remotePort = 12345;         // <-- PORT UDP MỞ TRÊN MÁY TÍNH
 const long uart_baudrate = 115200;             // Baud rate phải khớp với STM32/Anchor
 

@@ -15,6 +15,8 @@
 #include "deca_regs.h"
 #include "deca_spi.h"
 #include "port.h"
+#include "trilateration.h"
+#include "kalman_filter.h"
 typedef enum {
 	  SLOT_BEACON = 0,
 	  SLOT_TWR0,
@@ -31,6 +33,15 @@ typedef struct{
   uint16_t N;
 } rssi_raw_data_t;
 
+typedef struct {
+    uint8_t id;
+    float x;      // Tọa độ X của Anchor (Cài cứng)
+    float y;      // Tọa độ Y của Anchor (Cài cứng)
+    float rssi;   // RSSI đo được
+    double dist;  // Khoảng cách đo được
+} AnchorStats_t;
+extern vec2d_t final_position;
+extern AnchorStats_t anchor_database[4];
 extern uint8_t is_synced;
 extern SlotType prev_slot_index;
 // === function ===
@@ -39,7 +50,7 @@ void transmit_beacon(uint8_t slotNum);
 uint8_t receive_beacon_and_sync(uint8_t time);
 //uint8_t receive_beacon_and_sync(uint16_t timeout_ms);
 void app_uwb_init(void);
-void twr_tag(double *distance);
+void twr_tag(double *distance,uint8_t anchor_idx);
 void twr_anchor(void);
 void distance_send(double dis0, double dis1, double dis2, double dis3);
 void item_orientation_send(void);

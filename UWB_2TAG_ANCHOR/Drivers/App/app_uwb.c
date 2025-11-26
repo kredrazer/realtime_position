@@ -533,49 +533,6 @@ void dis_msg_get(uint8_t *dis_field, uint16_t *dis)
   }
 }
 
-//TAG
-// TAG - Sửa lại logic xử lý beacon
-//void app_uwb_process_beacon_tag(void)
-//{
-//  uint8_t slot_index = (TIM1->CNT) / 100;
-//
-//  if (slot_index == SLOT_BEACON && slot_index != prev_slot_index)
-//  {
-//    prev_slot_index = slot_index;
-//
-//    if (!is_synced)
-//    {
-//      // Chưa sync - dùng timeout dài để tìm beacon
-//      if (receive_beacon_and_sync(157))
-//      {
-//        is_synced = 1;
-//        missed_beacon_count = 0;
-//      }
-//    }
-//    else
-//    {
-//      // Đã sync - dùng timeout ngắn hơn nhưng vẫn đủ
-//      if (receive_beacon_and_sync(15))  // Tăng từ 7ms lên 15ms
-//      {
-//        missed_beacon_count = 0;  // Reset counter khi nhận được beacon
-//      }
-//      else
-//      {
-//        // Miss beacon
-//        missed_beacon_count++;
-//
-//        if (missed_beacon_count >= MAX_MISSED_BEACONS)
-//        {
-//          // Mất đồng bộ - reset và tìm lại
-//          is_synced = 0;
-//          missed_beacon_count = 0;
-//          prev_slot_index = 99;  // Reset để có thể vào slot beacon ngay
-//        }
-//      }
-//    }
-//  }
-//}
-// TAG - Sửa lại logic xử lý beacon
 void app_uwb_process_beacon_tag(void)
 {
   uint8_t slot_index = (TIM1->CNT) / 100;
@@ -595,7 +552,7 @@ void app_uwb_process_beacon_tag(void)
     }
     else 
     {
-      // Đã sync - luôn gán prev_slot_index để đánh dấu slot này đã xử lý
+      // Đã sync - l uôn gán prev_slot_index để đánh dấu slot này đã xử lý
       prev_slot_index = slot_index;
 
       if (receive_beacon_and_sync(15))
@@ -733,15 +690,19 @@ void app_uwb_process_twr_anchor(uint8_t anchor_id)
       case 0: 
         if(slot_index== SLOT_TWR0||slot_index==SLOT_TWR4)
           should_listen = 1;
+          break;
       case 1: 
         if(slot_index== SLOT_TWR1||slot_index==SLOT_TWR5)
           should_listen = 1;
+          break;
       case 2: 
         if(slot_index== SLOT_TWR2||slot_index==SLOT_TWR6)
           should_listen = 1;
+          break;
       case 3: 
         if(slot_index== SLOT_TWR3||slot_index==SLOT_TWR7)
           should_listen = 1;
+          break;
     }
     if(should_listen)
     {

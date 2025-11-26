@@ -39,6 +39,8 @@
 #include "math.h"
 #include "app_uwb.h"
 #include "app_uart_handler.h"
+
+#include"kalman_filter.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -94,6 +96,12 @@ double a_x =0;
 //#define RESP_RX_TIMEOUT_UUS 400
 //#define SPEED_OF_LIGHT 299702547
 double dis0, dis1, dis2, dis3 = 0;
+ vec2d_t anchor_pos[4] = {
+  {0.0, 0.0}, {5.0, 0.0}, {0.0, 5.0}, {5.0, 5.0}
+};
+//config kalmal_filter
+ kalmanFilter kf_x;
+ kalmanFilter kf_y;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -133,7 +141,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+   HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -158,6 +166,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
 //  ssd1306_Init();
   app_uwb_init();
+  kalman_init(&kf_x, 0.1f, 0.1f, 0.01f, 0.0f);
+  kalman_init(&kf_y, 0.1f, 0.1f, 0.01f, 0.0f);
   UART_HE_Receive_IT_Tag();
   HAL_TIM_Base_Start(&htim1);
   TIM1->CNT = 0;
@@ -171,16 +181,18 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 //  //*-------tag_code--------*//
-	  app_uwb_process_beacon_tag();
-	  app_uwb_process_twr_tag(&dis0, &dis1, &dis2, &dis3);
-	  app_uwb_process_dist_send(dis0,dis1,dis2,dis3);
+//	  app_uwb_process_beacon_tag();
+//	  app_uwb_process_twr_tag(&dis0, &dis1, &dis2, &dis3);
+//	  app_uwb_process_dist_send(dis0,dis1,dis2,dis3);
+//	  twr_tag(&dis0);
 
      //*-------anchor_code--------*//
-//     app_uwb_process_beacon_anchor(anchor_id);
-//     app_uwb_process_twr_anchor(anchor_id);
-//     app_uwb_process_dist_revc(&dis0, &dis1, &dis2, &dis3,anchor_id);
+     app_uwb_process_beacon_anchor(anchor_id);
+     app_uwb_process_twr_anchor(anchor_id);
+     app_uwb_process_dist_revc(&dis0, &dis1, &dis2, &dis3,anchor_id);
+//	  twr_anchor();
 // check_becon_send_code
-	  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_4);
+	  // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_4);
 
   }
   /* USER CODE END 3 */

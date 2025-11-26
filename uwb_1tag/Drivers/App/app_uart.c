@@ -72,6 +72,7 @@ typedef struct __attribute__((packed))
 } UART_Message_Item_Orientation;
 
 void app_uart_dist(UART_HandleTypeDef *huart, uint8_t *buffer)
+// config lại bản tin giống bản tin của anh Giỏi về bản tin uart
 {
 	if (buffer[10] == 0) return;
     

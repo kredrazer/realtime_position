@@ -3,6 +3,7 @@
  *
  *  Created on: Jul 24, 2025
  *      Author: Hoàng Quân
+ *      Side_author: Tuấn Nguyễn
  */
 
 #ifndef APP_UWB_APP_UWB_C_
@@ -21,6 +22,8 @@
 #include "app_uart_handler.h"
 #include "app_uart.h"
 #include <math.h>
+#include "kalman_filter.h"
+#include "trilateration.h"
 typedef unsigned long long uint64;
 
 #define TX_ANT_DLY 16436
@@ -47,7 +50,16 @@ typedef unsigned long long uint64;
 #define RESP_RX_TIMEOUT_UUS 400
 #define SPEED_OF_LIGHT 299702547
 #define CIR_PWR_OFFSET 0x06
+#define DWT_TIME_UNITS          (1.0/499.2e6/128.0) //!< = 15.65e-12 
+#define TICKS_PER_MS       (499.2e6*128/1000)
+#define TX_DELAY_MS_coeff   (TICKS_PER_MS/256)
+#define MS_TO_DELAY_UNIT(x)  ((uint32_t)((x)*TX_DELAY_MS_coeff))
+#define SLOT_DURATION_MS        10
+#define SUPERFRAME_SLOTS        10
+
 static uint8_t missed_beacon_count = 0;
+static uint64_t beacon_rx_ts_64 =0;
+static unsigned next_beacon_tx_time_unit=0;
 #define MAX_MISSED_BEACONS 3 
 static uint8 beacon_msg[] =  {0x41, 0x88, 0, 0xCA, 0xDE, 'B', 'E', 'A', 'C', 0xE2, 0, 0, 0};
 static uint8 tx_poll_msg[] = {0x41, 0x88, 0, 0xCA, 0xDE, 'P', 'O', 'L', 'L', 0xE0, 0, 0};
@@ -64,6 +76,17 @@ static uint8 rx_buffer_new[RX_BUF_LEN];
 static uint8 rx_buffer_guide[RX_BUF_LEN];
 static uint8 rx_buffer_dis[25];
 static uint8 rx_buffer_item[25];
+AnchorStats_t anchor_database[4] = {
+    {0, 0.0, 0.0, -999.0, 0.0},
+    {1, 5.0, 0.0, -999.0, 0.0},
+    {2, 0.0, 5.0, -999.0, 0.0},
+    {3, 5.0, 5.0, -999.0, 0.0}
+};
+
+vec2d_t final_position = {0.0, 0.0};
+extern vec2d_t anchor_pos[4];
+extern kalmanFilter kf_x;
+extern kalmanFilter kf_y;
 
 static dwt_config_t config = {
 	  5,               /* Channel number. */
@@ -122,7 +145,42 @@ void transmit_beacon(uint8_t slotNum)
           }
   dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_TXFRS);
 }
-
+// void transmit_beacon(uint8_t slotNum)
+//   {
+//     beacon_msg[10]=slotNum;
+//     dwt_writetxdata(sizeof(beacon_msg), beacon_msg, 0);
+//     dwt_writetxfctrl(sizeof(beacon_msg), 0, 0);
+//     uint32_t period_delay =  MS_TO_DELAY_UNIT(SUPERFRAME_SLOTS*SLOT_DURATION_MS);
+//     int ret;
+//     if(next_beacon_tx_time_unit==0)
+//       {
+//         dwt_forcetrxoff();
+//         dwt_starttx(DWT_START_TX_IMMEDIATE);
+//         while(!(dwt_read32bitreg(SYS_STATUS_ID)&SYS_STATUS_TXFRS)) {};
+//             dwt_write32bitreg(SYS_STATUS_ID,SYS_STATUS_TXFRS);
+//         uint32_t raw_tx_time = dwt_readtxtimestamplo32();
+//         next_beacon_tx_time_unit = (raw_tx_time>>8)+period_delay;
+//         return;
+//       }
+//     dwt_setdelayedtrxtime(next_beacon_tx_time_unit & 0xFFFFFFFE);
+//     ret = dwt_starttx(DWT_START_TX_DELAYED);
+//     if (ret == DWT_SUCCESS)
+//       {
+//         next_beacon_tx_time_unit += period_delay;
+//         while (!(dwt_read32bitreg(SYS_STATUS_ID) & SYS_STATUS_TXFRS)) {};
+//         dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_TXFRS);
+//         HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_4);
+//       }
+//     else
+//       {
+//         dwt_starttx(DWT_START_TX_IMMEDIATE);
+        
+//         while (!(dwt_read32bitreg(SYS_STATUS_ID) & SYS_STATUS_TXFRS)) {};
+//         dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_TXFRS);
+//         uint32_t raw_tx_time = dwt_readtxtimestamplo32();
+//         next_beacon_tx_time_unit = (raw_tx_time >> 8) + period_delay;
+//       }
+//   }
 uint8_t receive_beacon_and_sync(uint8_t time)
 {
   dwt_forcetrxoff();
@@ -174,7 +232,7 @@ uint8_t receive_beacon_and_sync(uint8_t time)
 
 
 //TAG
-void twr_tag(double *distance)
+void twr_tag(double *distance,uint8_t anchor_idx)
 {
   dwt_forcetrxoff();
   dwt_setrxaftertxdelay(POLL_TX_TO_RESP_RX_DLY_UUS);
@@ -227,12 +285,17 @@ void twr_tag(double *distance)
 
       double tof = ((rtd_init - rtd_resp * (1 - clockOffsetRatio)) / 2.0) * DWT_TIME_UNITS;
       *distance = tof * SPEED_OF_LIGHT;
+      anchor_database[anchor_idx].rssi= rssi_dbm;
+      anchor_database[anchor_idx].dist =*distance;
+
     }
   }
   else
   {
     dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR);
     dwt_rxreset();
+     anchor_database[anchor_idx].rssi=-999.0f;
+     anchor_database[anchor_idx].dist=0;
   }
 }
 
@@ -529,77 +592,28 @@ void dis_msg_get(uint8_t *dis_field, uint16_t *dis)
   }
 }
 
-//TAG
-// TAG - Sửa lại logic xử lý beacon
-//void app_uwb_process_beacon_tag(void)
-//{
-//  uint8_t slot_index = (TIM1->CNT) / 100;
-//
-//  if (slot_index == SLOT_BEACON && slot_index != prev_slot_index)
-//  {
-//    prev_slot_index = slot_index;
-//
-//    if (!is_synced)
-//    {
-//      // Chưa sync - dùng timeout dài để tìm beacon
-//      if (receive_beacon_and_sync(157))
-//      {
-//        is_synced = 1;
-//        missed_beacon_count = 0;
-//      }
-//    }
-//    else
-//    {
-//      // Đã sync - dùng timeout ngắn hơn nhưng vẫn đủ
-//      if (receive_beacon_and_sync(15))  // Tăng từ 7ms lên 15ms
-//      {
-//        missed_beacon_count = 0;  // Reset counter khi nhận được beacon
-//      }
-//      else
-//      {
-//        // Miss beacon
-//        missed_beacon_count++;
-//
-//        if (missed_beacon_count >= MAX_MISSED_BEACONS)
-//        {
-//          // Mất đồng bộ - reset và tìm lại
-//          is_synced = 0;
-//          missed_beacon_count = 0;
-//          prev_slot_index = 99;  // Reset để có thể vào slot beacon ngay
-//        }
-//      }
-//    }
-//  }
-//}
-// TAG - Sửa lại logic xử lý beacon
 void app_uwb_process_beacon_tag(void)
 {
   uint8_t slot_index = (TIM1->CNT) / 100;
   
   if (slot_index == SLOT_BEACON && slot_index != prev_slot_index)
   {
-    // !!! KHÔNG GÁN prev_slot_index ở đây !!!
-    
     if (!is_synced)
     {
-      // Chưa sync - dùng timeout dài để tìm beacon
       if (receive_beacon_and_sync(157)) 
       {
         is_synced = 1;
         missed_beacon_count = 0;
-        prev_slot_index = slot_index; // <-- CHỈ GÁN KHI THÀNH CÔNG
+        prev_slot_index = slot_index;
       }
-      // Nếu thất bại, KHÔNG gán prev_slot_index
-      // để lần lặp sau nó có thể thử lại.
     }
     else 
     {
-      // Đã sync - luôn gán prev_slot_index để đánh dấu slot này đã xử lý
       prev_slot_index = slot_index;
 
       if (receive_beacon_and_sync(15))
       {
-        missed_beacon_count = 0;  // Reset counter khi nhận được beacon
+        missed_beacon_count = 0;
       }
       else
       {
@@ -608,7 +622,6 @@ void app_uwb_process_beacon_tag(void)
         
         if (missed_beacon_count >= MAX_MISSED_BEACONS)
         {
-          // Mất đồng bộ - reset và tìm lại
           is_synced = 0;
           missed_beacon_count = 0;
           prev_slot_index = 99;  // Reset để có thể vào lại ngay
@@ -687,16 +700,16 @@ void app_uwb_process_twr_tag(double *dis0, double *dis1, double *dis2, double *d
       switch(slot_index)
       {
           case SLOT_TWR0:
-              twr_tag(dis0);
+              twr_tag(dis0,0);
               break;
           case SLOT_TWR1:
-              twr_tag(dis1);
+              twr_tag(dis1,1);
               break;
           case SLOT_TWR2:
-              twr_tag(dis2);
+              twr_tag(dis2,2);
               break;
           case SLOT_TWR3:
-              twr_tag(dis3);
+              twr_tag(dis3,3);
               break;
       }
 	}
@@ -734,7 +747,20 @@ void app_uwb_process_dist_send(double dis0, double dis1, double dis2, double dis
 	if (is_synced && slot_index != prev_slot_index && slot_index == SLOT_DIS_TX)
 	{
 		prev_slot_index = slot_index;
-		distance_send(dis0, dis1, dis2, dis3);
+    int worst_idx=0;
+    float min_rssi=anchor_database[0].rssi;
+    for(int i =1;i<4;i++)
+    {
+      if(anchor_database[i].rssi<min_rssi)
+      {
+        worst_idx=i;
+        min_rssi=anchor_database[i].rssi;
+
+      }
+    }
+    double d_send[4] = {dis0, dis1, dis2, dis3};
+    d_send[worst_idx] = 0.0;
+	distance_send(d_send[0], d_send[1], d_send[2], d_send[3]);
 	}
 }
 
@@ -749,10 +775,43 @@ void app_uwb_process_dist_revc(uint16_t *dis0, uint16_t *dis1, uint16_t *dis2, u
       {
           distance_revc(dis0, dis1, dis2, dis3);
           app_uart_dist(&huart1, rx_buffer_dis);
+          // add_trilateration và lọc rồi nha
+          float d[4];
+          d[0]=(*dis0)/100.0f;
+          d[1]=(*dis1)/100.0f;
+          d[2]=(*dis2)/100.0f;
+          d[3]=(*dis3)/100.0f;
+          int valid_idx[3];
+          int cnt =0;
+          for(int i =0; i<4;i++)
+          {
+            if(d[i]>0.01f)
+            {
+              if(cnt<3)
+              {
+                valid_idx[cnt]=i;
+                cnt++;
+              }
+            }
+          }
+          if(cnt==3)
+          {
+            vec2d_t p1 = anchor_pos[valid_idx[0]]; float r1 = d[valid_idx[0]];
+            vec2d_t p2 = anchor_pos[valid_idx[1]]; float r2 = d[valid_idx[1]];
+            vec2d_t p3 = anchor_pos[valid_idx[2]]; float r3 = d[valid_idx[2]];
+            vec2d_t raw_pos;
+            if(trilateration_2d(p1, r1, p2, r2, p3, r3, &raw_pos))
+            {
+              float final_x = updateEstimate(&kf_x,raw_pos.x);
+              float final_y = updateEstimate(&kf_y,raw_pos.y);
+              char buff[50];
+              sprintf(buff, "RAW:%.2f,%.2f | KF:%.2f,%.2f\r\n", raw_pos.x, raw_pos.y, final_x, final_y);
+              HAL_UART_Transmit(&huart1, (uint8_t*)buff, strlen(buff), 10);
+            }
       }
   }
 }
-
+}
 //TAG
 void app_uwb_process_item_orientation_send(void)
 {
