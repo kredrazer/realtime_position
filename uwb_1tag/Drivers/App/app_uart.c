@@ -71,6 +71,20 @@ typedef struct __attribute__((packed))
     uint8_t tail;
 } UART_Message_Item_Orientation;
 
+typedef struct
+{
+    uint8_t startByte;             // là 0xAB
+    uint8_t type;                  // là 0x01 ứng với bản tin truyền loc lên esp
+	uint8_t tagAddr[2];			   // địa chỉ Tag: 0xAA, 0x01, tagAddr[1] là twrt slot
+	uint8_t anchorAddr[2];
+    uint16_t Loc_x;   			   // đơn vị cm
+	uint16_t Loc_y;
+	uint8_t check_code;
+	uint8_t endByte;      		   // 0xFF
+} __attribute__((packed)) UART_Packet_Loc_Tag_Struct_t;
+
+
+
 void app_uart_dist(UART_HandleTypeDef *huart, uint8_t *buffer)
 // config lại bản tin giống bản tin của anh Giỏi về bản tin uart
 {
@@ -128,4 +142,29 @@ void app_uart_item_orientation(UART_HandleTypeDef *huart, uint8_t *buffer)
         msg.check_code ^= raw[i];
 	}
 	HAL_UART_Transmit(huart, (uint8_t *)&msg, sizeof(UART_Message_Item_Orientation), 1);
+}
+
+void app_uart_position(UART_HandleTypeDef *huart, float x, float y, uint8_t anchor_id)
+{
+	UART_Packet_Loc_Tag_Struct_t msg;
+
+	msg.startByte = 0xAB;
+	msg.type = 0x01;
+	msg.tagAddr[0] = 0xAA;
+	msg.tagAddr[1] = 0x01; // As per request
+	msg.anchorAddr[0] = 0xBB;
+	msg.anchorAddr[1] = anchor_id;
+	msg.Loc_x = (uint16_t)(x); // Convert to cm
+	msg.Loc_y = (uint16_t)(y); // Convert to cm
+	msg.endByte = 0xFF;
+
+	uint8_t *raw = (uint8_t *)&msg;
+	msg.check_code = 0;
+	// Checksum from startByte to Loc_y
+	for (int i = 0; i < offsetof(UART_Packet_Loc_Tag_Struct_t, check_code); i++)
+	{
+		msg.check_code ^= raw[i];
+	}
+
+	HAL_UART_Transmit(huart, (uint8_t *)&msg, sizeof(UART_Packet_Loc_Tag_Struct_t), 10);
 }

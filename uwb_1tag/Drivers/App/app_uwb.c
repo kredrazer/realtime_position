@@ -87,6 +87,7 @@ vec2d_t final_position = {0.0, 0.0};
 extern vec2d_t anchor_pos[4];
 extern kalmanFilter kf_x;
 extern kalmanFilter kf_y;
+char buff[50];
 
 static dwt_config_t config = {
 	  5,               /* Channel number. */
@@ -594,90 +595,95 @@ void dis_msg_get(uint8_t *dis_field, uint16_t *dis)
 
 void app_uwb_process_beacon_tag(void)
 {
-  uint8_t slot_index = (TIM1->CNT) / 100;
-  
-  if (slot_index == SLOT_BEACON && slot_index != prev_slot_index)
-  {
-    if (!is_synced)
-    {
-      if (receive_beacon_and_sync(157)) 
-      {
-        is_synced = 1;
-        missed_beacon_count = 0;
-        prev_slot_index = slot_index;
-      }
-    }
-    else 
-    {
-      prev_slot_index = slot_index;
+	// Nếu chưa đồng bộ, ưu tiên hàng đầu là tìm lại beacon
+	if (!is_synced)
+	{
+		// Bật bộ thu với timeout dài để chắc chắn bắt được beacon tiếp theo
+		if (receive_beacon_and_sync(157)) // 157ms > 1 superframe (100ms)
+		{
+			is_synced = 1;
+			missed_beacon_count = 0;
+			// Không cần set prev_slot_index ở đây, vì timer đã được sync
+		}
+		return; // Kết thúc, chờ vòng lặp tiếp theo
+	}
 
-      if (receive_beacon_and_sync(15))
-      {
-        missed_beacon_count = 0;
-      }
-      else
-      {
-        // Miss beacon
-        missed_beacon_count++;
-        
-        if (missed_beacon_count >= MAX_MISSED_BEACONS)
-        {
-          is_synced = 0;
-          missed_beacon_count = 0;
-          prev_slot_index = 99;  // Reset để có thể vào lại ngay
-        }
-      }
-    }
-  }
+	// Nếu đã đồng bộ, chỉ xử lý khi vào đúng slot
+	uint8_t slot_index = (TIM1->CNT) / 100;
+	if (slot_index == SLOT_BEACON && slot_index != prev_slot_index)
+	{
+		prev_slot_index = slot_index;
+
+		// Lắng nghe beacon với timeout ngắn để xác nhận lại đồng bộ
+		if (receive_beacon_and_sync(15))
+		{
+			missed_beacon_count = 0; // Đồng bộ tốt, reset bộ đếm
+		}
+		else
+		{
+			// Bỏ lỡ beacon
+			missed_beacon_count++;
+			if (missed_beacon_count >= MAX_MISSED_BEACONS)
+			{
+				is_synced = 0; // Mất đồng bộ
+			}
+		}
+	}
 }
 
 // ANCHOR - Sửa lại logic tương tự
 void app_uwb_process_beacon_anchor(uint8_t anchor_id) 
 {
-  uint8_t slot_index = (TIM1->CNT) / 100;
-
-  if (slot_index != prev_slot_index && slot_index == SLOT_BEACON)
+  if (anchor_id == 0)
   {
-    prev_slot_index = slot_index;
-    
-    if (anchor_id == 0) 
+    // ANCHOR CHÍNH: Logic không đổi, chỉ phát beacon ở đúng slot
+    uint8_t slot_index = (TIM1->CNT) / 100;
+    if (slot_index != prev_slot_index && slot_index == SLOT_BEACON)
     {
-      // Anchor chính - luôn phát beacon
+      prev_slot_index = slot_index;
       is_synced = 1;
       missed_beacon_count = 0;
       transmit_beacon(slot_index);
-    } 
-    else 
+    }
+  }
+  else
+  {
+    // ANCHOR PHỤ: Logic đồng bộ được ưu tiên hàng đầu
+    // 1. Nếu chưa đồng bộ, hãy tìm kiếm beacon ngay lập tức
+    if (!is_synced)
     {
-      // Anchor phụ - cần đồng bộ với anchor chính
-      if (!is_synced)
+      // Bật bộ thu với timeout dài để chắc chắn bắt được beacon tiếp theo
+      if (receive_beacon_and_sync(157)) // 157ms > 1 superframe (100ms)
       {
-        if (receive_beacon_and_sync(157)) 
-        {
-          is_synced = 1;
-          missed_beacon_count = 0;
-        }
+        is_synced = 1;
+        missed_beacon_count = 0;
       }
-      else 
+      // Dù thành công hay không, cũng không làm gì khác cho đến khi đồng bộ được
+      return;
+    }
+
+    // 2. Nếu đã đồng bộ, hoạt động theo slot
+    uint8_t slot_index = (TIM1->CNT) / 100;
+    if (slot_index != prev_slot_index && slot_index == SLOT_BEACON)
+    {
+      prev_slot_index = slot_index;
+      // Lắng nghe beacon với timeout ngắn để xác nhận lại đồng bộ
+      if (receive_beacon_and_sync(15))
       {
-        if (receive_beacon_and_sync(15))  // Tăng timeout
+        missed_beacon_count = 0; // Đồng bộ tốt, reset bộ đếm
+      }
+      else
+      {
+        // Bỏ lỡ beacon
+        missed_beacon_count++;
+        if (missed_beacon_count >= MAX_MISSED_BEACONS)
         {
-          missed_beacon_count = 0;
-        }
-        else
-        {
-          missed_beacon_count++;
-          
-          if (missed_beacon_count >= MAX_MISSED_BEACONS)
-          {
-            is_synced = 0;
-            missed_beacon_count = 0;
-            prev_slot_index = 99;
-          }
+          is_synced = 0; // Mất đồng bộ, vòng lặp sau sẽ vào trạng thái tìm kiếm
         }
       }
     }
   }
+  // Logic xử lý cho các slot khác chỉ nên chạy khi is_synced = 1
 }
 
 // Thêm hàm helper để check trạng thái sync (optional)
@@ -774,44 +780,51 @@ void app_uwb_process_dist_revc(uint16_t *dis0, uint16_t *dis1, uint16_t *dis2, u
       if(anchor_id == 0)
       {
           distance_revc(dis0, dis1, dis2, dis3);
-          app_uart_dist(&huart1, rx_buffer_dis);
+          // app_uart_dist(&huart1, rx_buffer_dis);
           // add_trilateration và lọc rồi nha
           float d[4];
           d[0]=(*dis0)/100.0f;
           d[1]=(*dis1)/100.0f;
           d[2]=(*dis2)/100.0f;
           d[3]=(*dis3)/100.0f;
-          int valid_idx[3];
+          int valid_idx[4]; // Tăng kích thước để khớp với 4 anchor
           int cnt =0;
           for(int i =0; i<4;i++)
           {
-            if(d[i]>0.01f)
+            if(d[i] > 0.01f && cnt < 4) // Đảm bảo không ghi tràn và chỉ lấy tối đa 4 anchor hợp lệ
             {
-              if(cnt<3)
-              {
-                valid_idx[cnt]=i;
-                cnt++;
-              }
+              valid_idx[cnt++] = i;
             }
           }
-          if(cnt==3)
+          if(cnt >= 3) 
           {
             vec2d_t p1 = anchor_pos[valid_idx[0]]; float r1 = d[valid_idx[0]];
             vec2d_t p2 = anchor_pos[valid_idx[1]]; float r2 = d[valid_idx[1]];
             vec2d_t p3 = anchor_pos[valid_idx[2]]; float r3 = d[valid_idx[2]];
             vec2d_t raw_pos;
-            if(trilateration_2d(p1, r1, p2, r2, p3, r3, &raw_pos))
+            if(trilateration_2d(p1, r1, p2, r2, p3, r3, &raw_pos)) // Sử dụng 3 anchor đầu tiên tìm được
             {
+              // sử dụng kalman ở đây anh nhé :))
               float final_x = updateEstimate(&kf_x,raw_pos.x);
               float final_y = updateEstimate(&kf_y,raw_pos.y);
-              char buff[50];
-              sprintf(buff, "RAW:%.2f,%.2f | KF:%.2f,%.2f\r\n", raw_pos.x, raw_pos.y, final_x, final_y);
-              HAL_UART_Transmit(&huart1, (uint8_t*)buff, strlen(buff), 10);
+              // sprintf(buff, "RAW:%.2f,%.2f | KF:%.2f,%.2f\r\n", raw_pos.x, raw_pos.y, final_x, final_y);
+              // HAL_UART_Transmit(&huart1, (uint8_t*)buff, strlen(buff), 10);
+              app_uart_position(&huart1, final_x, final_y, anchor_id);
+              // sprintf(buff, "RAW:%.2f,%.2f | KF:%.2f,%.2f\r\n", raw_pos.x, raw_pos.y, final_x, final_y);
+              // HAL_UART_Transmit(&huart1, (uint8_t*)buff, strlen(buff), 10);
             }
-      }
+          }
+//          else if (cnt == 2) // Trường hợp chỉ có 2 anchor, chỉ in ra khoảng cách để test
+//          {
+//              float r1 = d[valid_idx[0]];
+//              float r2 = d[valid_idx[1]];
+//              sprintf(buff, "TEST_2_ANCHORS: D%d=%.2f, D%d=%.2f\r\n", valid_idx[0], r1, valid_idx[1], r2);
+//              HAL_UART_Transmit(&huart1, (uint8_t*)buff, strlen(buff), 10);
+//          }
+    }
   }
 }
-}
+
 //TAG
 void app_uwb_process_item_orientation_send(void)
 {
@@ -868,7 +881,7 @@ void app_uwb_process_guide_send(uint8_t anchor_id)
 	dwt_rxdiag_t diagnostics;
 	dwt_readdiagnostics(&diagnostics);
   int32_t quality = (int32_t)diagnostics.firstPathAmp2 - (int32_t)diagnostics.stdNoise;
-  return quality; 
+  return quality;
  }
  void get_signal_data(rssi_raw_data_t *raw_data){
   raw_data->C = dwt_read16bitoffsetreg(RX_FQUAL_ID,CIR_PWR_OFFSET);

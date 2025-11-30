@@ -16,5 +16,6 @@ void app_uart_guide(UART_HandleTypeDef *huart, uint8_t *buffer);
 // Anchor
 void app_uart_dist(UART_HandleTypeDef *huart, uint8_t *buffer);
 void app_uart_item_orientation(UART_HandleTypeDef *huart, uint8_t *buffer);
+void app_uart_position(UART_HandleTypeDef *huart, float x, float y, uint8_t anchor_id);
 
 #endif /* APP_UART_APP_UART_H_ */
